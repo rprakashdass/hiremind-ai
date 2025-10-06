@@ -1,0 +1,37 @@
+fastapi
+uvicorn[standard]
+PyPDF2
+reportlab
+pytesseract
+opencv-python-headless
+pillow
+keybert[spacy]
+spacy
+groq
+python-dotenv
+numpy
+pdf2image
+SpeechRecognition
+pydub
+scikit-learn
+scipy
+python-multipart
+python-docx
+fastapi-cors
+sentence-transformers
+pdfplumber
+# Authentication & Database
+sqlalchemy
+psycopg2-binary
+python-jose[cryptography]
+passlib[argon2]
+argon2-cffi
+alembic
+# Additional utilities
+email-validator
+python-dateutil
+pydantic[email]
+openai
+# WebSocket support
+websockets
+aiohttp
