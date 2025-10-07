@@ -208,6 +208,36 @@ class InterviewAIService:
         
         return improvements[:3]  # Limit to top 3 improvements
 
+    async def chat(self, prompt: str, session_type: str = "general") -> str:
+        """Generate a conversational AI reply for realtime chat.
+        This is a lightweight heuristic for local dev; swap with actual LLM.
+        """
+        text = prompt.strip()
+        if not text:
+            return "Could you please repeat that?"
+
+        # Simple intent/style based on session type
+        if session_type == "behavioral":
+            followups = [
+                "What was the situation and your specific responsibility?",
+                "What actions did you take and why?",
+                "What was the measurable result or lesson learned?",
+            ]
+            return (
+                "Thanks for sharing. "
+                "To deepen your response, consider the STAR format (Situation, Task, Action, Result). "
+                f"For example: {followups[0]}"
+            )
+        elif session_type == "technical":
+            return (
+                "Got it. Could you walk me through your approach step by step, "
+                "including trade-offs and any complexity or performance considerations?"
+            )
+        else:
+            return (
+                "Thanks. Could you add a concrete example and quantify the impact if possible?"
+            )
+
 
 # Initialize the service
 ai_service = InterviewAIService()
@@ -294,3 +324,7 @@ async def generate_final_feedback(questions: List) -> Dict[str, Any]:
         "areas_for_improvement": all_improvements[:5],
         "recommendations": recommendations[:3]
     }
+
+# Lightweight helper for realtime chat
+async def chat_with_ai(message: str, session_type: str = "general") -> str:
+    return await ai_service.chat(message, session_type)

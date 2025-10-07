@@ -59,6 +59,7 @@ export default function VideoInterview({
   const [currentTranscript, setCurrentTranscript] = useState('');
   const [isAITyping, setIsAITyping] = useState(false);
   const [interviewStatus, setInterviewStatus] = useState<'connecting' | 'active' | 'completed'>('connecting');
+  const [textInput, setTextInput] = useState('');
   
   // Speech recognition states
   const [isListening, setIsListening] = useState(false);
@@ -69,15 +70,23 @@ export default function VideoInterview({
   const websocketRef = useRef<WebSocket | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const chatScrollRef = useRef<HTMLDivElement | null>(null);
+  const initGenRef = useRef(0);
   
-  // Initialize video stream
+  // Initialize media + websocket; make cleanup StrictMode-safe via generation token
   useEffect(() => {
+    const myGen = ++initGenRef.current;
     initializeMedia();
     initializeWebSocket();
     initializeSpeechRecognition();
-    
+
     return () => {
-      cleanup();
+      // Defer cleanup so the next StrictMode mount can bump the generation first
+      setTimeout(() => {
+        if (initGenRef.current === myGen) {
+          cleanup();
+        }
+      }, 0);
     };
   }, []);
   
@@ -101,7 +110,19 @@ export default function VideoInterview({
   };
   
   const initializeWebSocket = () => {
-    const wsUrl = `ws://localhost:8000/api/interview/realtime/ws/${sessionToken}`;
+    // Prevent duplicate sockets in Strict Mode or remounts
+    if (
+      websocketRef.current &&
+      (websocketRef.current.readyState === WebSocket.OPEN ||
+        websocketRef.current.readyState === WebSocket.CONNECTING)
+    ) {
+      return;
+    }
+    const base = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+    const url = new URL(base);
+    const wsProtocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsBase = `${wsProtocol}//${url.host}`;
+    const wsUrl = `${wsBase}/api/interview/realtime/ws/${sessionToken}`;
     const ws = new WebSocket(wsUrl);
     
     ws.onopen = () => {
@@ -119,8 +140,12 @@ export default function VideoInterview({
       handleWebSocketMessage(data);
     };
     
-    ws.onclose = () => {
-      console.log('WebSocket disconnected');
+    ws.onclose = (event) => {
+      console.log('WebSocket disconnected', {
+        code: event.code,
+        reason: event.reason,
+        wasClean: event.wasClean,
+      });
       setIsConnected(false);
     };
     
@@ -283,6 +308,20 @@ export default function VideoInterview({
       setIsListening(false);
     }
   };
+
+  const sendTextMessage = () => {
+    const text = textInput.trim();
+    if (!text || !websocketRef.current || websocketRef.current.readyState !== WebSocket.OPEN) return;
+    // Push user's text message into chat
+    setMessages(prev => [...prev, {
+      type: 'user_message',
+      content: text,
+      timestamp: new Date().toISOString()
+    }]);
+    // Send to backend over WS
+    websocketRef.current.send(JSON.stringify({ type: 'user_text', text }));
+    setTextInput('');
+  };
   
   const endInterview = () => {
     if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN) {
@@ -297,7 +336,12 @@ export default function VideoInterview({
       videoStream.getTracks().forEach(track => track.stop());
     }
     if (websocketRef.current) {
-      websocketRef.current.close();
+      const ws = websocketRef.current;
+      // Avoid closing a CONNECTING socket (Strict Mode double invoke). Let it settle.
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.close();
+      }
+      websocketRef.current = null;
     }
     if (speechRecognition) {
       speechRecognition.stop();
@@ -313,18 +357,26 @@ export default function VideoInterview({
       stopListening();
     }
   }, [isAudioEnabled, isConnected, interviewStatus]);
+
+  // Auto-scroll chat to bottom on new messages or typing indicator changes
+  useEffect(() => {
+    const el = chatScrollRef.current;
+    if (el) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [messages, currentTranscript, isAITyping]);
   
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
+    <div className="min-h-screen border border-gray-300 bg-white">
       {/* Header */}
-      <div className="bg-gray-800 border-b border-gray-700 p-4">
+      <div className="bg-white border-b border-gray-300 p-4">
         <div className="flex items-center justify-between max-w-7xl mx-auto">
           <div className="flex items-center space-x-4">
             <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-              <span className="text-sm font-bold">AI</span>
+              <span className="text-sm font-bold text-white">AI</span>
             </div>
             <div>
-              <h1 className="text-lg font-semibold">AI Interview Session</h1>
+              <h1 className="text-lg font-semibold ">AI Interview Session</h1>
               <p className="text-sm text-gray-400">
                 {interviewType.charAt(0).toUpperCase() + interviewType.slice(1)} Interview
               </p>
@@ -350,11 +402,11 @@ export default function VideoInterview({
           {/* Video Panel */}
           <div className="lg:col-span-2 space-y-4">
             {/* AI Avatar / Video */}
-            <Card className="bg-gray-800 border-gray-700 p-6 h-64">
+            <Card className="bg-white border-gray-200 p-6 h-52">
               <div className="flex items-center justify-center h-full">
                 <div className="text-center">
                   <div className="w-24 h-24 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <span className="text-2xl font-bold">AI</span>
+                    <span className="text-2xl font-bold text-white">AI</span>
                   </div>
                   <h3 className="text-lg font-semibold">AI Interviewer</h3>
                   <p className="text-gray-400">Ready to begin your interview</p>
@@ -372,7 +424,7 @@ export default function VideoInterview({
             </Card>
             
             {/* User Video */}
-            <Card className="bg-gray-800 border-gray-700 p-4 h-64">
+            <Card className="bg-white border-gray-200 p-1 h-98">
               <div className="relative h-full">
                 <video
                   ref={videoRef}
@@ -384,7 +436,7 @@ export default function VideoInterview({
                   }`}
                 />
                 {!isVideoEnabled && (
-                  <div className="w-full h-full bg-gray-700 rounded-lg flex items-center justify-center">
+                  <div className="w-full h-[458px] bg-white rounded-lg flex items-center justify-center">
                     <div className="text-center">
                       <CameraOff className="w-12 h-12 mx-auto mb-2 text-gray-400" />
                       <p className="text-gray-400">Camera off</p>
@@ -393,7 +445,7 @@ export default function VideoInterview({
                 )}
                 
                 {/* User name overlay */}
-                <div className="absolute bottom-2 left-2 bg-black bg-opacity-50 px-2 py-1 rounded">
+                <div className="absolute bottom-2 left-2 bg-white bg-opacity-50 px-2 py-1 rounded">
                   <span className="text-sm">{candidateName}</span>
                 </div>
                 
@@ -412,7 +464,7 @@ export default function VideoInterview({
                 variant={isVideoEnabled ? "default" : "destructive"}
                 size="lg"
                 onClick={toggleVideo}
-                className="rounded-full w-12 h-12 p-0"
+                className="rounded-full w-12 h-12 p-0 bg-white text-black border border-gray-400 hover:bg-gray-200"
               >
                 {isVideoEnabled ? <Camera className="w-5 h-5" /> : <CameraOff className="w-5 h-5" />}
               </Button>
@@ -421,7 +473,7 @@ export default function VideoInterview({
                 variant={isAudioEnabled ? "default" : "destructive"}
                 size="lg"
                 onClick={toggleAudio}
-                className="rounded-full w-12 h-12 p-0"
+                className="rounded-full w-12 h-12 p-0 bg-white text-black border border-gray-400 hover:bg-gray-200"
               >
                 {isAudioEnabled ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
               </Button>
@@ -430,7 +482,7 @@ export default function VideoInterview({
                 variant={isSpeakerEnabled ? "default" : "secondary"}
                 size="lg"
                 onClick={toggleSpeaker}
-                className="rounded-full w-12 h-12 p-0"
+                className="rounded-full w-12 h-12 p-0 bg-white text-black border border-gray-400 hover:bg-gray-200"
               >
                 {isSpeakerEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
               </Button>
@@ -447,26 +499,26 @@ export default function VideoInterview({
           </div>
           
           {/* Chat Panel */}
-          <div className="space-y-4">
-            <Card className="bg-gray-800 border-gray-700 p-4 h-full">
-              <div className="flex items-center space-x-2 mb-4">
+            <div className="flex flex-col h-[calc(100vh-180px)]">
+            <Card className="bg-white border-gray-200 p-4 flex flex-col h-full">
+              <div className="flex items-center space-x-2 mb-4 flex-shrink-0">
                 <MessageSquare className="w-5 h-5" />
                 <h3 className="font-semibold">Conversation</h3>
               </div>
-              
-              <div className="space-y-3 h-[calc(100%-60px)] overflow-y-auto">
+
+              <div ref={chatScrollRef} className="space-y-3 flex-1 overflow-y-auto pr-2">
                 {messages.map((message, index) => (
                   <div
                     key={index}
-                    className={`p-3 rounded-lg ${
+                    className={`p-3 rounded-lg max-w-[85%] ${
                       message.type === 'ai_message'
-                        ? 'bg-blue-600 text-white'
+                        ? 'bg-white mr-auto border border-gray-400'
                         : message.type === 'user_message'
-                        ? 'bg-gray-600 text-white ml-8'
-                        : 'bg-gray-700 text-gray-300'
+                        ? 'bg-white ml-auto border border-gray-400'
+                        : 'bg-white mx-auto border border-gray-400'
                     }`}
                   >
-                    <div className="text-sm">
+                    <div className="text-sm opacity-80">
                       <strong>
                         {message.type === 'ai_message' ? 'AI Interviewer' :
                          message.type === 'user_message' ? 'You' : 'System'}:
@@ -481,27 +533,48 @@ export default function VideoInterview({
                 
                 {/* Current transcript */}
                 {currentTranscript && (
-                  <div className="bg-gray-600 text-white ml-8 p-3 rounded-lg opacity-70">
-                    <div className="text-sm"><strong>You (typing...):</strong></div>
+                  <div className="bg-white p-3 rounded-lg opacity-70 max-w-[85%] ml-auto">
+                    <div className="text-sm opacity-80"><strong>You (speaking...)</strong></div>
                     <div className="mt-1">{currentTranscript}</div>
                   </div>
                 )}
                 
                 {/* AI typing indicator */}
                 {isAITyping && (
-                  <div className="bg-blue-600 text-white p-3 rounded-lg">
-                    <div className="text-sm"><strong>AI Interviewer:</strong></div>
+                  <div className="bg-gray-500 p-3 rounded-lg max-w-[85%] mr-auto">
+                    <div className="text-sm opacity-80"><strong>AI Interviewer</strong></div>
                     <div className="mt-1 flex items-center space-x-1">
                       <span>Thinking</span>
                       <div className="flex space-x-1">
-                        <div className="w-1 h-1 bg-white rounded-full animate-bounce"></div>
-                        <div className="w-1 h-1 bg-white rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-                        <div className="w-1 h-1 bg-white rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                        <div className="w-1 h-1 rounded-full animate-bounce"></div>
+                        <div className="w-1 h-1 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                        <div className="w-1 h-1 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
                       </div>
                     </div>
                   </div>
                 )}
               </div>
+
+              {/* Text input */}
+              <form
+                className="mt-3 flex items-center gap-2 flex-shrink-0"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  sendTextMessage();
+                }}
+              >
+                <input
+                  type="text"
+                  className="w-full rounded-md bg-white border border-gray-400 px-3 py-2 text-sm placeholder-gray-400 focus:outline-none "
+                  placeholder={isConnected ? 'Type a message…' : 'Connecting…'}
+                  value={textInput}
+                  onChange={(e) => setTextInput(e.target.value)}
+                  disabled={!isConnected}
+                />
+                <Button className='bg-gray-500 text-white border-gray-700' type="submit" disabled={!isConnected || textInput.trim().length === 0}>
+                  Send
+                </Button>
+              </form>
             </Card>
           </div>
         </div>
