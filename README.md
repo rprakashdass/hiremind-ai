@@ -74,7 +74,6 @@ A complete career preparation platform with AI-powered features including resume
 4. **Environment configuration:**
    ```bash
    cp .env.example .env
-   # Edit .env with your database URL and API keys
    ```
 
 5. **Database setup:**

@@ -2,12 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { ProtectedRoute } from '@/components/protected-route';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import VideoInterview from '@/components/VideoInterview';
-import { useAppContext } from '@/context/AppContext';
-import { apiClient } from '@/lib/api-client';
+import { useAuthStore } from '@/store/auth-store';
 import { ArrowLeft, CheckCircle, Clock, Users, Target, TrendingUp } from 'lucide-react';
 
 interface InterviewFeedback {
@@ -22,7 +22,7 @@ interface InterviewFeedback {
 export default function InterviewSession() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user } = useAppContext();
+  const { user } = useAuthStore();
   
   // Get session parameters
   const sessionType = searchParams.get('type') || 'general';
@@ -52,18 +52,21 @@ export default function InterviewSession() {
     setSessionError(null);
     
     try {
-      const response = await apiClient.post('/api/interview/realtime/create', {
-        session_type: sessionType,
-        resume_id: resumeId ? parseInt(resumeId) : null,
-        resume_text: null // You can fetch resume text if needed
-      });
+      // Note: You'll need to implement this API endpoint
+      // const response = await apiClient.post('/api/interview/realtime/create', {
+      //   session_type: sessionType,
+      //   resume_id: resumeId ? parseInt(resumeId) : null,
+      //   resume_text: null
+      // });
       
-      setSessionToken(response.data.session_token);
+      // For now, simulate session creation
+      const mockToken = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      setSessionToken(mockToken);
       setSessionPhase('interview');
       
     } catch (error: any) {
       console.error('Error creating interview session:', error);
-      setSessionError(error.response?.data?.detail || 'Failed to create interview session');
+      setSessionError('Failed to create interview session');
     } finally {
       setIsCreatingSession(false);
     }
@@ -102,40 +105,42 @@ export default function InterviewSession() {
   // Setup Phase - Creating Session
   if (sessionPhase === 'setup') {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle className="flex items-center justify-center space-x-2">
-              <Target className="w-6 h-6 text-blue-600" />
-              <span>Preparing Interview</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {isCreatingSession ? (
-              <div className="text-center space-y-4">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                <p className="text-gray-600">Setting up your interview session...</p>
-                <div className="space-y-2 text-sm text-gray-500">
-                  <p>✓ Initializing AI interviewer</p>
-                  <p>✓ Preparing questions for {sessionType} interview</p>
-                  <p>✓ Setting up video connection</p>
+      <ProtectedRoute>
+        <div className="p-8 flex items-center justify-center">
+          <Card className="w-full max-w-md">
+            <CardHeader className="text-center">
+              <CardTitle className="flex items-center justify-center space-x-2">
+                <Target className="w-6 h-6 text-blue-600" />
+                <span>Preparing Interview</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {isCreatingSession ? (
+                <div className="text-center space-y-4">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                  <p className="text-gray-600 dark:text-gray-300">Setting up your interview session...</p>
+                  <div className="space-y-2 text-sm text-gray-500 dark:text-gray-400">
+                    <p>✓ Initializing AI interviewer</p>
+                    <p>✓ Preparing questions for {sessionType} interview</p>
+                    <p>✓ Setting up video connection</p>
+                  </div>
                 </div>
-              </div>
-            ) : sessionError ? (
-              <div className="text-center space-y-4">
-                <div className="text-red-500 text-xl">⚠️</div>
-                <p className="text-red-600">{sessionError}</p>
-                <Button onClick={createInterviewSession} className="w-full">
-                  Try Again
-                </Button>
-                <Button variant="outline" onClick={handleReturnToDashboard} className="w-full">
-                  Return to Dashboard
-                </Button>
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
-      </div>
+              ) : sessionError ? (
+                <div className="text-center space-y-4">
+                  <div className="text-red-500 text-xl">⚠️</div>
+                  <p className="text-red-600">{sessionError}</p>
+                  <Button onClick={createInterviewSession} className="w-full">
+                    Try Again
+                  </Button>
+                  <Button variant="outline" onClick={handleReturnToDashboard} className="w-full">
+                    Return to Dashboard
+                  </Button>
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+        </div>
+      </ProtectedRoute>
     );
   }
   
@@ -146,7 +151,7 @@ export default function InterviewSession() {
         sessionToken={sessionToken}
         onEndInterview={handleInterviewEnd}
         interviewType={sessionType}
-        candidateName={user?.full_name || user?.email || 'Candidate'}
+        candidateName={`${user?.first_name} ${user?.last_name}`.trim() || user?.email || 'Candidate'}
       />
     );
   }
@@ -154,25 +159,26 @@ export default function InterviewSession() {
   // Completed Phase - Show Feedback
   if (sessionPhase === 'completed' && feedback) {
     return (
-      <div className="min-h-screen bg-gray-50 p-4">
-        <div className="max-w-4xl mx-auto">
-          {/* Header */}
-          <div className="mb-6">
-            <Button
-              variant="outline"
-              onClick={handleReturnToDashboard}
-              className="mb-4"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Dashboard
-            </Button>
-            
-            <div className="text-center">
-              <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">Interview Completed!</h1>
-              <p className="text-gray-600">Thank you for completing your {sessionType} interview.</p>
+      <ProtectedRoute>
+        <div className="p-8">
+          <div className="max-w-4xl mx-auto">
+            {/* Header */}
+            <div className="mb-6">
+              <Button
+                variant="outline"
+                onClick={handleReturnToDashboard}
+                className="mb-4"
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back to Dashboard
+              </Button>
+              
+              <div className="text-center">
+                <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Interview Completed!</h1>
+                <p className="text-gray-600 dark:text-gray-300">Thank you for completing your {sessionType} interview.</p>
+              </div>
             </div>
-          </div>
           
           {/* Feedback Summary */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -281,16 +287,19 @@ export default function InterviewSession() {
           </div>
         </div>
       </div>
+    </ProtectedRoute>
     );
   }
   
   // Fallback
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-        <p className="text-gray-600">Loading interview session...</p>
+    <ProtectedRoute>
+      <div className="p-8 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-300">Loading interview session...</p>
+        </div>
       </div>
-    </div>
+    </ProtectedRoute>
   );
 }

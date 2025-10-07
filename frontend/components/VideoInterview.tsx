@@ -29,6 +29,17 @@ interface InterviewFeedback {
   conversation_duration: number;
 }
 
+// Add type definitions for SpeechRecognition API
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start(): void;
+  stop(): void;
+  onresult: (event: any) => void;
+  onerror: (event: any) => void;
+}
+
 export default function VideoInterview({ 
   sessionToken, 
   onEndInterview, 
@@ -40,7 +51,7 @@ export default function VideoInterview({
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [isSpeakerEnabled, setIsSpeakerEnabled] = useState(true);
   const [videoStream, setVideoStream] = useState<MediaStream | null>(null);
-  
+    
   // Interview states
   const [isConnected, setIsConnected] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
