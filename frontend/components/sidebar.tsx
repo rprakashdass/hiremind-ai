@@ -10,9 +10,8 @@ import {
   Moon,
   Sun,
   Briefcase,
-  Video,
+  BarChart3,
   User,
-  History,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
@@ -95,21 +94,14 @@ export default function Sidebar() {
         <NavLink href="/ats-checker" icon={FileText}>
           ATS Checker
         </NavLink>
-        {/* Section group header template */}
-        {/* <div className="px-4 pt-4 pb-2 text-xs font-semibold uppercase text-muted-foreground">
-          Mock Interview
-        </div> */}
         <NavLink href="/interview" icon={User}>
           Mock Interview
         </NavLink>
         <NavLink href="/career-coach" icon={MessageSquare}>
           Career Coach
         </NavLink>
-        <div className="px-4 pt-4 pb-2 text-xs font-semibold uppercase text-muted-foreground">
-          History
-        </div>
-        <NavLink href="/report" icon={History}>
-          Report
+        <NavLink href="/report" icon={BarChart3}>
+          Reports
         </NavLink>
       </nav>
       <div className="border-t p-2 flex flex-col gap-2">

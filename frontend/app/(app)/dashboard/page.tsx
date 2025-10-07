@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useAuthStore } from '../../store/auth-store';
-import { ProtectedRoute } from '../../components/protected-route';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
-import { Button } from '../../components/ui/button';
+import { useAuthStore } from '@/store/auth-store';
+import { ProtectedRoute } from '@/components/protected-route';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { 
   FileText, 

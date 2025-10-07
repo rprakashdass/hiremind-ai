@@ -23,6 +23,7 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'ATS Checker', href: '/ats-checker', icon: FileText },
   { name: 'Mock Interview', href: '/interview', icon: MessageSquare },
+  { name: 'Career Coach', href: '/career-coach', icon: MessageSquare },
   { name: 'Reports', href: '/report', icon: BarChart3 },
   { name: 'Settings', href: '/settings', icon: Settings },
 ];
