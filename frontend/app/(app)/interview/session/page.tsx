@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import VideoInterview from '@/components/VideoInterview';
+import apiClient, { RealtimeSessionResponse } from '@/lib/api-client';
 import { useAuthStore } from '@/store/auth-store';
 import { ArrowLeft, CheckCircle, Clock, Users, Target, TrendingUp } from 'lucide-react';
 
@@ -52,16 +53,13 @@ export default function InterviewSession() {
     setSessionError(null);
     
     try {
-      // Note: You'll need to implement this API endpoint
-      // const response = await apiClient.post('/api/interview/realtime/create', {
-      //   session_type: sessionType,
-      //   resume_id: resumeId ? parseInt(resumeId) : null,
-      //   resume_text: null
-      // });
-      
-      // For now, simulate session creation
-      const mockToken = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      setSessionToken(mockToken);
+      const payload = {
+        session_type: sessionType,
+        ...(resumeId ? { resume_id: parseInt(resumeId, 10) } : {}),
+        resume_text: null as string | null
+      };
+      const response: RealtimeSessionResponse = await apiClient.createRealtimeInterviewSession(payload);
+      setSessionToken(response.session_token);
       setSessionPhase('interview');
       
     } catch (error: any) {

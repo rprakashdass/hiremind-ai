@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import get_db, engine
 from app.models.database import Base
-from app.api import auth, ats, resumes, career_coach, interview
+from app.api import auth, ats, resumes, career_coach, interview, realtime_interview
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -63,6 +63,7 @@ def health_check(db: Session = Depends(get_db)):
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(ats.router, prefix="/api/ats", tags=["ATS Analysis"])
 app.include_router(interview.router, prefix="/api/interview", tags=["Interview"])
+app.include_router(realtime_interview.router, prefix="/api/interview", tags=["Realtime Interview"])
 app.include_router(resumes.router, prefix="/api/resumes", tags=["Resumes"])
 app.include_router(career_coach.router, prefix="/api/career-coach", tags=["Career Coach"])
 

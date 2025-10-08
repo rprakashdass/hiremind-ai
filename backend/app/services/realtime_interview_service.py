@@ -4,13 +4,13 @@ import uuid
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 import aiohttp
-import websockets
+from starlette.websockets import WebSocketDisconnect
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.database import InterviewSession, InterviewQuestion, User
-from app.services.interview_service import ai_service
+from app.services.interview_service import ai_service, chat_with_ai
 
 
 class RealTimeInterviewManager:
@@ -69,28 +69,28 @@ class RealTimeInterviewManager:
             return
             
         session = self.active_sessions[session_token]
+        # Register this connection as the latest for the session
         self.websocket_connections[session_token] = websocket
         
         try:
-            # Send welcome message
-            await self.send_ai_message(
-                session_token,
-                "Hello! I'm your AI interviewer. I'm excited to chat with you today. Let's start with an introduction - could you tell me a bit about yourself?"
-            )
-            
-            # Handle incoming messages
-            async for message in websocket:
-                data = json.loads(message)
+            # Handle incoming messages (we'll send the welcome after connection_ready)
+            while True:
+                try:
+                    raw = await websocket.receive_text()
+                except WebSocketDisconnect:
+                    raise
+                data = json.loads(raw)
                 await self.handle_message(session_token, data)
-                
-        except websockets.exceptions.ConnectionClosed:
+
+        except WebSocketDisconnect:
             print(f"WebSocket connection closed for session {session_token}")
         except Exception as e:
             print(f"Error in WebSocket connection: {e}")
         finally:
-            # Cleanup
-            if session_token in self.websocket_connections:
-                del self.websocket_connections[session_token]
+            # Cleanup: remove mapping only if it still points to this websocket
+            current = self.websocket_connections.get(session_token)
+            if current is websocket:
+                self.websocket_connections.pop(session_token, None)
                 
     async def handle_message(self, session_token: str, data: Dict[str, Any]):
         """Handle incoming WebSocket messages"""
@@ -143,8 +143,12 @@ class RealTimeInterviewManager:
         # Show typing indicator
         await self.send_typing_indicator(session_token, True)
         
-        # Generate AI response
-        ai_response = await self.generate_ai_response(session_token, user_text)
+        # Generate AI response via chat service for free-form interaction
+        try:
+            ai_response = await chat_with_ai(user_text, session.get("session_type", "general"))
+        except Exception:
+            # Fallback to existing logic if chat fails
+            ai_response = await self.generate_ai_response(session_token, user_text)
         
         # Hide typing indicator
         await self.send_typing_indicator(session_token, False)
@@ -162,6 +166,14 @@ class RealTimeInterviewManager:
             "status": "active",
             "message": "Connection established. Interview starting..."
         })
+        # Send a welcome after the client confirms readiness
+        await self.send_typing_indicator(session_token, True)
+        await asyncio.sleep(0.4)
+        await self.send_ai_message(
+            session_token,
+            "Hello! I'm your AI interviewer. I'm excited to chat with you today. Let's start with an introduction - could you tell me a bit about yourself?"
+        )
+        await self.send_typing_indicator(session_token, False)
         
     async def generate_ai_response(self, session_token: str, user_input: str) -> str:
         """Generate AI interviewer response"""
@@ -320,14 +332,15 @@ class RealTimeInterviewManager:
         
     async def send_message(self, session_token: str, message: Dict[str, Any]):
         """Send message through WebSocket"""
-        if session_token in self.websocket_connections:
-            websocket = self.websocket_connections[session_token]
+        websocket = self.websocket_connections.get(session_token)
+        if websocket is not None:
             try:
-                await websocket.send(json.dumps(message))
-            except websockets.exceptions.ConnectionClosed:
-                # Remove closed connection
-                if session_token in self.websocket_connections:
-                    del self.websocket_connections[session_token]
+                await websocket.send_text(json.dumps(message))
+            except (WebSocketDisconnect, Exception):
+                # Only remove if the mapping still points to this socket
+                current = self.websocket_connections.get(session_token)
+                if current is websocket:
+                    self.websocket_connections.pop(session_token, None)
                     
     async def end_interview(self, session_token: str):
         """End the interview session"""

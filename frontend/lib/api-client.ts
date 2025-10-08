@@ -83,6 +83,18 @@ export interface InterviewQuestion {
   answered_at?: string;
 }
 
+export interface RealtimeSessionCreate {
+  session_type: string;
+  resume_id?: number;
+  resume_text?: string | null;
+}
+
+export interface RealtimeSessionResponse {
+  session_token: string;
+  session_id: string;
+  websocket_url: string;
+}
+
 export interface ApiError {
   detail: string;
   error_code?: string;
@@ -243,6 +255,12 @@ class ApiClient {
 
   async deleteInterviewSession(id: number): Promise<{ message: string }> {
     const response = await this.client.delete(`/api/interview/sessions/${id}`);
+    return response.data;
+  }
+
+  // Realtime interview endpoints
+  async createRealtimeInterviewSession(payload: RealtimeSessionCreate): Promise<RealtimeSessionResponse> {
+    const response = await this.client.post<RealtimeSessionResponse>(`/api/interview/realtime/create`, payload);
     return response.data;
   }
 
